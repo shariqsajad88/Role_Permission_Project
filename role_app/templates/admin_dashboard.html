@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <h1>Admin Dashboard</h1>
+
+    <div>
+        <h2>Statistics</h2>
+        <p>Total Users: {{ user_count }}</p>
+        <p>Total Roles: {{ group_count }}</p>
+        <p>Total Permissions: {{ permission_count }}</p>
+    </div>
+
+    <div>
+        <h2>Recent Permission Changes</h2>
+        <ul>
+            {% for change in recent_changes %}
+                <li>User: {{ change.user.username }} - Permission: {{ change.permission.codename }} - Role: {{ change.role.name }} (Granted: {{ change.granted }})</li>
+            {% empty %}
+                <li>No recent changes</li>
+            {% endfor %}
+        </ul>
+    </div>
+    
+
+</body>
+</html>
