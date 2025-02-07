@@ -1,25 +1,21 @@
-from django.contrib.auth.models import Group, Permission, User
+from django.contrib.auth.models import Group, Permission, User 
 from googleapiclient.discovery import build
 from google.oauth2 import service_account
 from django.conf import settings
 from django.http import JsonResponse
-from rest_framework import generics, status
-from rest_framework.views import APIView
-from rest_framework.response import Response
 from django.views import View
 import logging
 from .models import RolePermission
 from django.views.generic import TemplateView
 from django.db.models import Count
-from rest_framework.permissions import IsAdminUser
 logger = logging.getLogger(__name__)
+
 
 class ExportRolesPermissionsView(View):
     def get(self, request, *args, **kwargs):
         SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
         SERVICE_ACCOUNT_FILE = settings.GOOGLE_CREDENTIALS_JSON
 
-        # Load Google Sheets credentials
         try:
             creds = service_account.Credentials.from_service_account_file(
                 SERVICE_ACCOUNT_FILE, scopes=SCOPES
@@ -28,7 +24,6 @@ class ExportRolesPermissionsView(View):
             logger.error(f"Service account file error: {str(e)}")
             return JsonResponse({"status": "Error", "message": str(e)}, status=500)
 
-        # Get spreadsheet ID
         SAMPLE_SPREADSHEET_ID = getattr(settings, 'SHEET_ID', None)
         if not SAMPLE_SPREADSHEET_ID:
             logger.error("SHEET_ID not configured in settings")
@@ -42,36 +37,30 @@ class ExportRolesPermissionsView(View):
             logger.error(f"Error initializing Google Sheets service: {str(e)}")
             return JsonResponse({"status": "Error", "message": "Failed to initialize Google Sheets service."}, status=500)
 
-        # Clear existing RolePermission data
-        RolePermission.objects.all().delete()
+        # Fetch all permissions
+        all_permissions = Permission.objects.all()
 
-        all_users = User.objects.all()
-        all_permissions = list(Permission.objects.all())
+        # Fetch RolePermission data
+        role_permissions = RolePermission.objects.select_related("user", "role").prefetch_related("role__permissions").all()
 
-        # Header with Role, User, and Permission columns
+        # Build header row
         header = ["Username", "Role"] + [f"{perm.content_type.app_label}.{perm.codename}" for perm in all_permissions]
         data = [header]
 
-        role_permissions = []
+        # Append data rows
+        for rp in role_permissions:
+            # Create a dictionary of permissions with default "N"
+            permission_dict = {f"{perm.content_type.app_label}.{perm.codename}": "N" for perm in all_permissions}
 
-        # Build data rows and RolePermission records
-        for user in all_users:
-            user_groups = user.groups.all()
+            # Mark granted permissions as "Y"
+            for perm in rp.role.permissions.all():
+                perm_key = f"{perm.content_type.app_label}.{perm.codename}"
+                if perm_key in permission_dict and rp.granted:
+                    permission_dict[perm_key] = "Y"
 
-            for group in user_groups:
-                group_permissions = set(group.permissions.values_list('id', flat=True))
-
-                row = [user.username, group.name]
-                for perm in all_permissions:
-                    granted = perm.id in group_permissions
-                    role_permissions.append(RolePermission(
-                        user=user, role=group, permission=perm, granted=granted
-                    ))
-                    row.append("Y" if granted else "N")
-                data.append(row)
-
-        # Bulk save RolePermission records
-        RolePermission.objects.bulk_create(role_permissions)
+            # Build row with permission statuses
+            row = [rp.user.username, rp.role.name if rp.role else "No Role"] + list(permission_dict.values())
+            data.append(row)
 
         try:
             sheet_metadata = sheet.get(spreadsheetId=SAMPLE_SPREADSHEET_ID).execute()
@@ -80,14 +69,12 @@ class ExportRolesPermissionsView(View):
 
             roles_permissions_sheet_id = None
 
-            # Create or update the 'RolesPermissions' sheet
+            # Create 'RolesPermissions' sheet if it doesn't exist
             if 'RolesPermissions' not in sheet_names:
                 request_body = {
                     'requests': [{
                         'addSheet': {
-                            'properties': {
-                                'title': 'RolesPermissions'
-                            }
+                            'properties': {'title': 'RolesPermissions'}
                         }
                     }]
                 }
@@ -98,7 +85,7 @@ class ExportRolesPermissionsView(View):
                 roles_permissions_sheet_id = response['replies'][0]['addSheet']['properties']['sheetId']
                 logger.info("Created 'RolesPermissions' sheet")
 
-            # Write data to Google Sheets
+            # Append data to Google Sheets
             result = sheet.values().update(
                 spreadsheetId=SAMPLE_SPREADSHEET_ID,
                 range="RolesPermissions",
@@ -106,7 +93,7 @@ class ExportRolesPermissionsView(View):
                 body={"values": data}
             ).execute()
 
-            
+            # Apply formatting to header row if new sheet was created
             if roles_permissions_sheet_id is not None:
                 format_requests = [{
                     'repeatCell': {
@@ -124,7 +111,6 @@ class ExportRolesPermissionsView(View):
                         'fields': 'userEnteredFormat(backgroundColor,textFormat)'
                     }
                 }]
-
                 sheet.batchUpdate(
                     spreadsheetId=SAMPLE_SPREADSHEET_ID,
                     body={'requests': format_requests}
@@ -135,7 +121,9 @@ class ExportRolesPermissionsView(View):
             logger.error(f"Error exporting to Google Sheets: {str(e)}")
             return JsonResponse({"status": "Error", "message": f"Failed to export roles to Google Sheets: {str(e)}"}, status=500)
 
-        return JsonResponse({"status": "Success", "message": "Roles and permissions exported to database and Google Sheets."})
+        return JsonResponse({"status": "Success", "message": "Roles and permissions exported to Google Sheets."})
+
+
 
 
 

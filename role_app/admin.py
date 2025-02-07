@@ -3,4 +3,4 @@ from .models import RolePermission
 
 @admin.register(RolePermission)
 class RolePermissionAdmin(admin.ModelAdmin):
-    list_display = ('user', 'role', 'permission', 'granted')
+    list_display = ('user', 'role', 'granted')
