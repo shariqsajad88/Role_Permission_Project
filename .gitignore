@@ -3,3 +3,7 @@ sheetsapi.json
 __pycache__/
 migrations/
 credentials/
+db.sqlite3
+role_app/__pycache__/admin.cpython-312.pyc
+role_app/__pycache__/models.cpython-312.pyc
+role_app/__pycache__/views.cpython-312.pyc

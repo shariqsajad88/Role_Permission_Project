@@ -37,20 +37,19 @@ class ExportRolesPermissionsView(View):
             logger.error(f"Error initializing Google Sheets service: {str(e)}")
             return JsonResponse({"status": "Error", "message": "Failed to initialize Google Sheets service."}, status=500)
 
-        # Fetch all permissions
+    
         all_permissions = Permission.objects.all()
 
-        # Fetch RolePermission data
+        
         role_permissions = RolePermission.objects.select_related("user", "role").prefetch_related("role__permissions").all()
 
-        # Build header row
+ 
         header = ["Username", "Role"] + [f"{perm.content_type.app_label}.{perm.codename}" for perm in all_permissions]
         data = [header]
 
-        # Append data rows
         for rp in role_permissions:
-            # Create a dictionary of permissions with default "N"
-            permission_dict = {f"{perm.content_type.app_label}.{perm.codename}": "N" for perm in all_permissions}
+            
+            permission_dict = {f"{perm.content_type.app_label}.{perm.codename}": " " for perm in all_permissions}
 
             # Mark granted permissions as "Y"
             for perm in rp.role.permissions.all():

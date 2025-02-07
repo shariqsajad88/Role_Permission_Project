@@ -9,3 +9,9 @@ class RolePermission(models.Model):
 
     def __str__(self):
         return f"{self.user.username} - {self.role.name} - (Granted: {self.granted})"
+
+    class Meta:
+        permissions = [
+            ("change_task_status", "Can change the status of tasks"),
+            ("close_task", "Can remove a task by setting its status as closed"),
+        ]
